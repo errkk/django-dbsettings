@@ -3,7 +3,6 @@ from decimal import Decimal
 from hashlib import md5
 from os.path import join as pjoin
 import time
-from PIL import Image
 
 from django import forms
 from django.conf import settings
@@ -16,8 +15,7 @@ from dbsettings.loading import get_setting_storage, set_setting_value
 __all__ = ['Value', 'BooleanValue', 'DecimalValue', 'EmailValue',
            'DurationValue', 'FloatValue', 'IntegerValue', 'PercentValue',
            'PositiveIntegerValue', 'StringValue', 'TextValue',
-           'MultiSeparatorValue', 'ImageValue',
-           'DateTimeValue', 'DateValue', 'TimeValue']
+           'MultiSeparatorValue', 'DateTimeValue', 'DateValue', 'TimeValue']
 
 
 class Value(object):
@@ -239,69 +237,6 @@ class MultiSeparatorValue(TextValue):
         else:
             value = []
         return value
-
-
-class ImageValue(Value):
-    def __init__(self, *args, **kwargs):
-        if 'upload_to' in kwargs:
-            self._upload_to = kwargs.pop('upload_to', '')
-        super(ImageValue, self).__init__(*args, **kwargs)
-
-    class field(forms.ImageField):
-        class widget(forms.FileInput):
-            "Widget with preview"
-
-            def render(self, name, value, attrs=None):
-                output = []
-
-                try:
-                    if not value:
-                        raise IOError('No value')
-
-                    Image.open(value.file)
-                    file_name = pjoin(settings.MEDIA_URL, value.name).replace("\\", "/")
-                    params = {"file_name": file_name}
-                    output.append(u'<p><img src="%(file_name)s" width="100" /></p>' % params)
-                except IOError:
-                    pass
-
-                output.append(forms.FileInput.render(self, name, value, attrs))
-                return mark_safe(''.join(output))
-
-    def to_python(self, value):
-        "Returns a native Python object suitable for immediate use"
-        return unicode(value)
-
-    def get_db_prep_save(self, value):
-        "Returns a value suitable for storage into a CharField"
-        if not value:
-            return None
-
-        hashed_name = md5(unicode(time.time())).hexdigest() + value.name[-4:]
-        image_path = pjoin(self._upload_to, hashed_name)
-        dest_name = pjoin(settings.MEDIA_ROOT, image_path)
-
-        with open(dest_name, 'wb+') as dest_file:
-            for chunk in value.chunks():
-                dest_file.write(chunk)
-
-        return unicode(image_path)
-
-    def to_editor(self, value):
-        "Returns a value suitable for display in a form widget"
-        if not value:
-            return None
-
-        file_name = pjoin(settings.MEDIA_ROOT, value)
-        try:
-            with open(file_name, 'rb') as f:
-                uploaded_file = SimpleUploadedFile(value, f.read(), 'image')
-
-                # hack to retrieve path from `name` attribute
-                uploaded_file.__dict__['_name'] = value
-                return uploaded_file
-        except IOError:
-            return None
 
 
 class DateTimeValue(Value):
